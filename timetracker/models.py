@@ -19,7 +19,7 @@ class Project(Base):
     tasks = relationship("Task")
 
     @staticmethod
-    def create_project(self, name):
+    def create_project(name):
         entry = Project(name=name)
         session.add(entry)
         session.commit()
