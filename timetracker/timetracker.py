@@ -5,8 +5,9 @@ from models import session, Project, Task, TimeEntry
 
 
 class Application(tk.Frame):
-    projects = {}
     timer_buttons = {}
+    main_screen = None
+    projects_list_screen = None
     project_screen = None
     popup = None
     project_name_input = None
@@ -19,7 +20,7 @@ class Application(tk.Frame):
         self.open_main_screen()
 
     def open_main_screen(self):
-        self.main_screen = tk.Frame(height=2, bd=1)
+        self.main_screen = tk.Frame()
         self.main_screen.pack(padx=5, pady=5)
         main_label = tk.Label(self.main_screen, text="Projects", font="default 16 bold")
         main_label.pack(side='top')
@@ -28,17 +29,21 @@ class Application(tk.Frame):
         b.pack(side='bottom')
 
     def update_projects_list(self):
-        for project in session.query(Project).all():
-            if not self.projects.get(project.id, None):
-                self.projects[project.id] = tk.Label(self.main_screen, text=project.name, fg="black")
-                self.projects[project.id].pack(side='top')
-                self.projects[project.id].bind(
+        if self.projects_list_screen:
+            self.projects_list_screen.destroy()
+        self.projects_list_screen = tk.Frame(self.main_screen)
+        self.projects_list_screen.pack(side='top')
+        projects = session.query(Project).all()
+        if not projects:
+            project_label = tk.Label(self.projects_list_screen, text="No projects found.", fg="black")
+            project_label.pack(side='top')
+        else:
+            for project in session.query(Project).all():
+                project_label = tk.Label(self.projects_list_screen, text=project.name, fg="black")
+                project_label.pack(side='top')
+                project_label.bind(
                     "<Button-1>", lambda event, project_id=project.id: self.open_project_screen(event, project_id)
                 )
-
-    def reset_projects_list(self):
-        self.projects = {}
-        self.update_projects_list()
 
     def show_new_project_popup(self):
         self.popup = tk.Toplevel()
@@ -52,11 +57,26 @@ class Application(tk.Frame):
         close_button = tk.Button(self.popup, text="Close", command=self.popup.destroy)
         close_button.pack(side='right')
 
+    def show_edit_project_popup(self, project_id):
+        project = session.query(Project).filter_by(id=project_id).first()
+        self.popup = tk.Toplevel()
+        self.popup.title("Edit Project #%s" % project_id)
+        self.project_name_input = tk.Entry(self.popup)
+        self.project_name_input.delete(0, tk.END)
+        self.project_name_input.insert(0, project.name)
+        self.project_name_input.pack()
+        create_button = tk.Button(
+            self.popup, text="Save", command=lambda project_id=project_id: self.save_project(project_id)
+        )
+        create_button.pack(side='left')
+        close_button = tk.Button(self.popup, text="Close", command=self.popup.destroy)
+        close_button.pack(side='right')
+
     def update_tasks_list(self, project_id):
         tasks = session.query(Task).filter_by(project_id=project_id)
         num_tasks = tasks.count()
         rows = 1
-        if tasks.count() == 0:
+        if num_tasks == 0:
             no_tasks_label = tk.Label(self.project_screen, text="No tasks found.")
             no_tasks_label.grid(row=1, column=0, columnspan=2)
         else:
@@ -81,14 +101,18 @@ class Application(tk.Frame):
                                   command=lambda: self.show_new_task_popup(project_id))
         create_button.grid(row=(rows + 1), columnspan=2)
 
+        edit_button = tk.Button(
+            self.project_screen, text="Edit",
+            command=lambda project_id=project_id: self.show_edit_project_popup(project_id)
+        )
+        edit_button.grid(row=(rows + 2), column=0)
         delete_button = tk.Button(
             self.project_screen, text="Delete",
             command=lambda project_id=project_id: self.show_delete_project_dialog(project_id)
         )
-        delete_button.grid(row=(rows + 2), column=0)
-
+        delete_button.grid(row=(rows + 2), column=1)
         back_button = tk.Button(self.project_screen, text="Back", command=self.back_to_main_screen)
-        back_button.grid(row=(rows + 2), column=1)
+        back_button.grid(row=(rows + 3), columnspan=2)
 
     def refresh_project_screen(self, project_id):
         self.main_screen.pack_forget()
@@ -107,8 +131,8 @@ class Application(tk.Frame):
         if self.main_screen:
             self.main_screen.destroy()
 
+        self.update_projects_list()
         self.open_main_screen()
-        self.reset_projects_list()
 
     def open_project_screen(self, event, project_id):
         self.refresh_project_screen(project_id)
@@ -137,7 +161,7 @@ class Application(tk.Frame):
         if result == 'yes':
             session.delete(project)
             session.commit()
-            self.refresh_main_screen()
+            self.update_projects_list()
             self.back_to_main_screen()
 
     def open_task_popup(self, event, task_id):
@@ -164,6 +188,13 @@ class Application(tk.Frame):
 
     def create_new_project(self):
         Project.create_project(name=self.project_name_input.get())
+        self.update_projects_list()
+        self.popup.destroy()
+
+    def save_project(self, project_id):
+        project = session.query(Project).filter_by(id=project_id).first()
+        project.name = self.project_name_input.get()
+        session.commit()
         self.update_projects_list()
         self.popup.destroy()
 
