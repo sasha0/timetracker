@@ -222,7 +222,7 @@ class Application(tk.Frame):
 
     def create_new_task(self, project_id):
         Task.create_task(
-            name=self.task_name_input.get(), external_task_is=self.external_task_id_input.get(), project_id=project_id
+            name=self.task_name_input.get(), external_task_id=self.external_task_id_input.get(), project_id=project_id
         )
         self.update_tasks_list(project_id)
         self.popup.destroy()
