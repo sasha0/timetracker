@@ -40,8 +40,8 @@ class Task(Base):
         return self.time_entries.filter(~TimeEntry.end_datetime).count() == 1
 
     @staticmethod
-    def create_task(name, project_id):
-        entry = Task(name=name, project_id=project_id)
+    def create_task(name, project_id, external_task_id):
+        entry = Task(name=name, project_id=project_id, external_task_id=external_task_id)
         session.add(entry)
         session.commit()
 
@@ -66,7 +66,8 @@ class TimeEntry(Base):
 
     @staticmethod
     def stop_log(task_id):
-        entry = session.query(TimeEntry).filter_by(task_id=task_id).first()
+        entry = session.query(TimeEntry).filter_by(task_id=task_id, end_datetime=None)\
+                                        .order_by(TimeEntry.end_datetime.desc()).first()
         entry.end_datetime = datetime.datetime.now()
         session.commit()
 
