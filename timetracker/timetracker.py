@@ -25,7 +25,7 @@ class Application(tk.Frame):
         main_label = tk.Label(self.main_screen, text="Projects", font="default 16 bold")
         main_label.pack(side='top')
         self.update_projects_list()
-        b = tk.Button(self.main_screen, text="Create A New Project", command=self.show_new_project_popup)
+        b = tk.Button(self.main_screen, text="Create A New Project", command=self.create_or_update_project)
         b.pack(side='bottom')
 
     def update_projects_list(self):
@@ -45,29 +45,26 @@ class Application(tk.Frame):
                     "<Button-1>", lambda event, project_id=project.id: self.open_project_screen(event, project_id)
                 )
 
-    def show_new_project_popup(self):
+    def create_or_update_project(self, project_id=None):
+        if project_id:
+            project = session.query(Project).filter_by(id=project_id).first()
+            title = "Edit Project #%s" % project_id
+            project_name_placeholder = project.name
+        else:
+            project_name_placeholder = "Project Name..."
+            title = "Create A New Project"
         self.popup = tk.Toplevel()
-        self.popup.title("Create A New Project")
+        self.popup.title(title)
         self.project_name_input = tk.Entry(self.popup)
         self.project_name_input.delete(0, tk.END)
-        self.project_name_input.insert(0, "Project Name...")
+        self.project_name_input.insert(0, project_name_placeholder)
         self.project_name_input.pack()
-        create_button = tk.Button(self.popup, text="Create", command=self.create_new_project)
-        create_button.pack(side='left')
-        close_button = tk.Button(self.popup, text="Close", command=self.popup.destroy)
-        close_button.pack(side='right')
-
-    def show_edit_project_popup(self, project_id):
-        project = session.query(Project).filter_by(id=project_id).first()
-        self.popup = tk.Toplevel()
-        self.popup.title("Edit Project #%s" % project_id)
-        self.project_name_input = tk.Entry(self.popup)
-        self.project_name_input.delete(0, tk.END)
-        self.project_name_input.insert(0, project.name)
-        self.project_name_input.pack()
-        create_button = tk.Button(
-            self.popup, text="Save", command=lambda project_id=project_id: self.save_project(project_id)
-        )
+        if project_id:
+            create_button = tk.Button(
+                self.popup, text="Save", command=lambda project_id=project_id: self.save_project(project_id)
+            )
+        else:
+            create_button = tk.Button(self.popup, text="Create", command=self.create_new_project)
         create_button.pack(side='left')
         close_button = tk.Button(self.popup, text="Close", command=self.popup.destroy)
         close_button.pack(side='right')
@@ -98,12 +95,12 @@ class Application(tk.Frame):
 
         rows += num_tasks
         create_button = tk.Button(self.project_screen, text="Create A New Task",
-                                  command=lambda: self.show_new_task_popup(project_id))
+                                  command=lambda: self.show_edit_task_popup(project_id))
         create_button.grid(row=(rows + 1), columnspan=2)
 
         edit_button = tk.Button(
             self.project_screen, text="Edit",
-            command=lambda project_id=project_id: self.show_edit_project_popup(project_id)
+            command=lambda project_id=project_id: self.create_or_update_project(project_id)
         )
         edit_button.grid(row=(rows + 2), column=0)
         delete_button = tk.Button(
@@ -137,20 +134,34 @@ class Application(tk.Frame):
     def open_project_screen(self, event, project_id):
         self.refresh_project_screen(project_id)
 
-    def show_new_task_popup(self, project_id):
+    def show_edit_task_popup(self, project_id=None, task_id=None):
+        if task_id:
+            task = session.query(Task).filter_by(id=task_id).first()
+            title = "Edit Task #%s" % task_id
+        else:
+            task = None
+            title = "Create A New Task"
+
         self.popup = tk.Toplevel(padx=5, pady=5)
-        self.popup.title("Create A New Task")
+        self.popup.title(title)
         task_name_label = tk.Label(self.popup, text='Task Name:')
         task_name_label.grid(row=0, columnspan=2, stick=tk.W)
         self.task_name_input = tk.Entry(self.popup, width=25)
         self.task_name_input.delete(0, tk.END)
+        if task_id and task and getattr(task, 'name', None):
+            self.task_name_input.insert(0, task.name)
         self.task_name_input.grid(row=1, columnspan=2, stick=tk.W)
-        task_external_id_label = tk.Label(self.popup, text='Task ID in external tracker:')
-        task_external_id_label.grid(row=2, columnspan=2, stick=tk.W)
-        task_external_id_input = tk.Entry(self.popup, width=25)
-        task_external_id_input.delete(0, tk.END)
-        task_external_id_input.grid(row=3, columnspan=4, stick=tk.W)
-        create_button = tk.Button(self.popup, text="Create", command=lambda: self.create_new_task(project_id))
+        external_task_id_label = tk.Label(self.popup, text='Task ID in external tracker:')
+        external_task_id_label.grid(row=2, columnspan=2, stick=tk.W)
+        self.external_task_id_input = tk.Entry(self.popup, width=25)
+        self.external_task_id_input.delete(0, tk.END)
+        if task_id and task and getattr(task, 'external_task_id', None):
+            self.external_task_id_input.insert(0, task.external_task_id)
+        self.external_task_id_input.grid(row=3, columnspan=4, stick=tk.W)
+        if task_id:
+            create_button = tk.Button(self.popup, text="Save", command=lambda: self.save_task(task_id))
+        else:
+            create_button = tk.Button(self.popup, text="Create", command=lambda: self.create_new_task(project_id))
         create_button.grid(row=4, column=0)
         close_button = tk.Button(self.popup, text="Close", command=self.popup.destroy)
         close_button.grid(row=4, column=1)
@@ -165,26 +176,37 @@ class Application(tk.Frame):
             self.back_to_main_screen()
 
     def open_task_popup(self, event, task_id):
-        self.popup = tk.Toplevel()
-        self.popup.title("Logged time")
-        task_label = tk.Label(self.popup, text="Logged time for task #%s" % task_id, font="default 16 bold")
-        task_label.pack(side='top')
+        self.popup = tk.Toplevel(padx=10, pady=10)
+        self.popup.title("Task #%s details" % task_id)
+        task_label = tk.Label(self.popup, text="Task #%s details" % task_id, font="default 16 bold")
+        task_label.grid(row=0, columnspan=2)
         logs = session.query(TimeEntry).filter_by(task_id=task_id)
-        if logs.count() == 0:
+        num_logs = logs.count()
+        if num_logs == 0:
             no_logs_label = tk.Label(self.popup, text="No logs found.")
-            no_logs_label.pack(side='top')
+            no_logs_label.grid(row=1, columnspan=2)
         else:
-            for log in logs:
+            for idx, log in enumerate(logs):
                 start_dt = getattr(log, 'start_datetime', '')
                 if start_dt:
-                    start_dt = start_dt.strftime('%d.%m.%y %H:%M')
+                    start_dt = start_dt.strftime('%d.%m.%y %H:%M:%S')
                 end_dt = getattr(log, 'end_datetime', '')
                 if end_dt is not None:
-                    end_dt = end_dt.strftime('%d.%m.%y %H:%M')
+                    end_dt = end_dt.strftime('%d.%m.%y %H:%M:%S')
                 else:
                     end_dt = '...'
                 label = tk.Label(self.popup, text='%s - %s' % (start_dt, end_dt))
-                label.pack(side='bottom', anchor=tk.W)
+                label.grid(row=(idx + 2), columnspan=2)
+
+        edit_button = tk.Button(
+            self.popup, text="Edit", command=lambda task_id=task_id: self.show_edit_task_popup(task_id=task_id)
+        )
+        edit_button.grid(row=(num_logs + 2), column=0)
+        delete_button = tk.Button(
+            self.popup, text="Delete",
+            command=lambda task_id=task_id: self.show_delete_task_dialog(task_id)
+        )
+        delete_button.grid(row=(num_logs + 2), column=1)
 
     def create_new_project(self):
         Project.create_project(name=self.project_name_input.get())
@@ -199,10 +221,31 @@ class Application(tk.Frame):
         self.popup.destroy()
 
     def create_new_task(self, project_id):
-        Task.create_task(name=self.task_name_input.get(), project_id=project_id)
+        Task.create_task(
+            name=self.task_name_input.get(), external_task_is=self.external_task_id_input.get(), project_id=project_id
+        )
         self.update_tasks_list(project_id)
         self.popup.destroy()
         self.refresh_project_screen(project_id)
+
+    def save_task(self, task_id):
+        task = session.query(Task).filter_by(id=task_id).first()
+        task.name = self.task_name_input.get()
+        task.external_task_id = self.external_task_id_input.get()
+        session.commit()
+        self.update_tasks_list(task.project_id)
+        self.popup.destroy()
+        self.refresh_project_screen(task.project_id)
+
+    def show_delete_task_dialog(self, task_id):
+        task = session.query(Task).filter_by(id=task_id).first()
+        project_id = task.project_id
+        result = messagebox.askquestion('Delete task "%s"' % task.name, 'Are You Sure?', icon='warning')
+        if result == 'yes':
+            session.delete(task)
+            session.commit()
+            self.popup.destroy()
+            self.refresh_project_screen(project_id)
 
     def start_timer(self, task_id):
         TimeEntry.start_log(task_id=task_id)
