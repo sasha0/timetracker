@@ -1,5 +1,9 @@
+import itertools
+
 import tkinter as tk
 from tkinter import messagebox
+
+from sqlalchemy import func
 
 from models import session, Project, Task, TimeEntry
 
@@ -180,33 +184,40 @@ class Application(tk.Frame):
         self.popup.title("Task #%s details" % task_id)
         task_label = tk.Label(self.popup, text="Task #%s details" % task_id, font="default 16 bold")
         task_label.grid(row=0, columnspan=2)
-        logs = session.query(TimeEntry).filter_by(task_id=task_id)
+        logs = session.query(TimeEntry).filter_by(task_id=task_id).order_by(TimeEntry.start_datetime.asc())
         num_logs = logs.count()
         if num_logs == 0:
             no_logs_label = tk.Label(self.popup, text="No logs found.")
             no_logs_label.grid(row=1, columnspan=2)
         else:
-            for idx, log in enumerate(logs):
-                start_dt = getattr(log, 'start_datetime', '')
-                if start_dt:
-                    start_dt = start_dt.strftime('%d.%m.%y %H:%M:%S')
-                end_dt = getattr(log, 'end_datetime', '')
-                if end_dt is not None:
-                    end_dt = end_dt.strftime('%d.%m.%y %H:%M:%S')
-                else:
-                    end_dt = '...'
-                label = tk.Label(self.popup, text='%s - %s' % (start_dt, end_dt))
-                label.grid(row=(idx + 2), columnspan=2)
+            num = 1
+            for created_date, grouped_logs in itertools.groupby(logs, lambda x: x.start_datetime.date()):
+                label = tk.Label(self.popup, text=created_date.strftime('%d.%m.%y'), font='default 12 bold')
+                label.grid(row=num, columnspan=2, stick=tk.W)
+                num += 1
+                for idx, log in enumerate(grouped_logs):
+                    start_dt = getattr(log, 'start_datetime', '')
+                    if start_dt:
+                        start_dt = start_dt.strftime('%H:%M:%S')
+                    end_dt = getattr(log, 'end_datetime', '')
+                    if end_dt is not None:
+                        end_dt = end_dt.strftime('%H:%M:%S')
+                    else:
+                        end_dt = '...'
+                    label = tk.Label(self.popup, text='%s - %s' % (start_dt, end_dt))
+                    label.grid(row=(num + 1), columnspan=2, stick=tk.W)
+                    num += 1
+                num += 1
 
         edit_button = tk.Button(
             self.popup, text="Edit", command=lambda task_id=task_id: self.show_edit_task_popup(task_id=task_id)
         )
-        edit_button.grid(row=(num_logs + 2), column=0)
+        edit_button.grid(row=(num_logs + 5), column=0)
         delete_button = tk.Button(
             self.popup, text="Delete",
             command=lambda task_id=task_id: self.show_delete_task_dialog(task_id)
         )
-        delete_button.grid(row=(num_logs + 2), column=1)
+        delete_button.grid(row=(num_logs + 5), column=1)
 
     def create_new_project(self):
         Project.create_project(name=self.project_name_input.get())
